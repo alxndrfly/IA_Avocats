@@ -11,10 +11,11 @@ import atexit
 
 # Set up Google Cloud credentials
 google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
-creds_temp_file = tempfile.NamedTemporaryFile(delete=False)
+creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 json.dump(google_creds, creds_temp_file)
 creds_temp_file.flush()
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
+
 
 # Add the cleanup function and register it
 def cleanup_temp_file():
