@@ -4,17 +4,27 @@ import io
 import fitz  # PyMuPDF
 from google.cloud import vision
 from google.cloud.vision_v1 import types
-from dotenv import load_dotenv
 from openai import OpenAI
+import tempfile
+import json
+import atexit
 
-# Load environment variables from .env file
-load_dotenv()
+# Set up Google Cloud credentials
+google_creds = st.secrets["GOOGLE_APPLICATION_CREDENTIALS"]
+creds_temp_file = tempfile.NamedTemporaryFile(delete=False)
+creds_temp_file.write(json.dumps(google_creds).encode())
+creds_temp_file.flush()
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
 
-# Set the Google Cloud credentials for this session
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+# Add the cleanup function and register it
+def cleanup_temp_file():
+    if os.path.exists(creds_temp_file.name):
+        os.unlink(creds_temp_file.name)
 
-# Initialize the OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+atexit.register(cleanup_temp_file)
+
+# Initialize the OpenAI client with the secret
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 def extract_text_from_pdfs(pdf_files, dpi=300):
     client = vision.ImageAnnotatorClient()
