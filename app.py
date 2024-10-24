@@ -10,7 +10,7 @@ import json
 import atexit
 
 # Set up Google Cloud credentials
-google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
+google_creds = st.secrets["GOOGLE_APPLICATION_CREDENTIALS"]
 creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 json.dump(google_creds, creds_temp_file)
 creds_temp_file.flush()
