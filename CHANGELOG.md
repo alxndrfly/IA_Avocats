@@ -1,4 +1,8 @@
 # Changelog
+## [Version 3.0.0] - 2024-11-08
+### Added
+- New feature: Organizes summaries by chronological order
+
 
 ## [Version 2.0.0] - 2024-11-08
 ### Fixed
