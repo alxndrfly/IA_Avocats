@@ -8,52 +8,114 @@ from openai import OpenAI
 import tempfile
 import json
 import atexit
-# from dotenv import load_dotenv          # Commented out for deployed environment
+from dotenv import load_dotenv          # Comment out for deployed environment
 from docx import Document
 from docx.shared import Inches, Pt, Mm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
+from datetime import datetime
+import re
 
 ############# Deployed variables #############
 
 # Convert AttrDict to a regular dictionary
-google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
+# google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
 
 # Create a temporary file
-creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+# creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 
 # Write the credentials to the temporary file
-json.dump(google_creds, creds_temp_file)
-creds_temp_file.flush()
+# json.dump(google_creds, creds_temp_file)
+# creds_temp_file.flush()
 
 # Set the environment variable
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
 
 
 # Add the cleanup function and register it
-def cleanup_temp_file():
-    if os.path.exists(creds_temp_file.name):
-        os.unlink(creds_temp_file.name)
+# def cleanup_temp_file():
+#     if os.path.exists(creds_temp_file.name):
+#         os.unlink(creds_temp_file.name)
 
-atexit.register(cleanup_temp_file)
+# atexit.register(cleanup_temp_file)
 
 # Initialize the OpenAI client with the secret
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 ############# END OF Deployed environment variables #############
 
 
 ############# Local environment variables #############
 # Load environment variables from .env file
-# load_dotenv()
+load_dotenv()
 
 # Set the Google Cloud credentials for this session
-# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
 # Initialize the OpenAI client
-# client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 ############# END OF Local environment variables #############
+
+
+
+# Prompt template to summarize the legal pieces
+prompt_template_summary = """
+Résume le texte entre les triples parenthèses en suivant ces directives :
+
+- Extrait les faits et informations importantes à mentionner
+- Résume et output en français.
+- Accorde les verbes au passé composé ou à l'imparfait.
+- Ajoute le numéro de pièce à la fin du paragraphe comme dans la structure à suivre
+- Extrait et ajoute la date en format "JJ mois AAAA" 
+
+Met la totalité du texte en forme une seule fois en suivant cette structure :
+
+Le <date>, <brève explication des faits>.
+
+<Explication résumée des faits en utilisant les termes clés> (Pièce nºx).
+
+((({})))"""
+
+# Prompt template to generate the bordereau entries
+prompt_template_bordereau = """
+
+Tu reçois un transcript d'une pièce juridique entre les triples parenthèses.
+Tu vas générer une ligne de bordereau de pièce en suivant ces directives :
+
+- Extrait le titre de la pièce qui décrit le plus justement la pièce en utilisant la terminologie juridique.
+- Sois précis et concis dans le titre.
+- Écris le titre avec une majuscule au début et le reste en minuscule.
+- Extrait le numéro de la pièce, que tu trouveras au début du transcript sous le format (Pièce Nºx)
+- Ajoute le numéro de pièce en notant simplement son chiffre comme dans la structure à suivre
+- Extrait et ajoute la date des faits de la pièce en format "JJ mois AAAA" 
+
+Output en suivant cette structure :
+
+<nº de pièce> - <Titre de la pièce> - du <JJ mois AAAA>
+
+IMPORTANT :
+- Relis ton output et verifie les conditions suivantes :
+- Dans le cas précis où la pièce est une attestation de témoin, mentionne le genre (Monsieur ou Madame) et le nom de famille de l'individu seulement (tout en majuscules).
+
+((({})))"""
+
+
+# Prompt template for general summarization or any document (Word or PDF)
+prompt_template_general = """
+
+Résume le texte entre les triples parenthèses en suivant ces directives :
+- Idées et points clés
+- Détails importants et conclusions
+- Flux logique de l'information
+- Conclusions ou résultats
+
+Structure le résumé en paragraphes clairs et conserve le sens original tout en étant concis.
+
+Texte à résumer :
+((({})))
+"""
+
 
 
 # Function to extract text from PDFs using Google Vision API with the name of each Pièce nºx.pdf
@@ -236,7 +298,6 @@ def convert_pdf_to_word(pdf_file, dpi=300):
     print("Conversion complete.")
     return doc_buffer
 
-
 # Function to call the GPT API
 def call_gpt(
     user_prompt,
@@ -296,49 +357,53 @@ def summarize_transcripts(prompt_template, transcripts):
 
     return "\n\n------\n\n".join(summaries)
 
-# Define the prompt template
-prompt_template_summary = """
-Résume le texte entre les triples parenthèses en suivant ces directives :
+# Function to parse ONLY the date at the start of a paragraph
+def parse_initial_date_fr(text):
+    """
+    Parse ONLY the date at the start of a paragraph.
+    Returns datetime object or None if no valid date found.
+    """
+    fr_months = {
+        'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+        'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+        'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+    }
+    
+    first_line = text.strip().split('\n')[0]
+    pattern = r'^Le (\d{1,2}) (\w+) (\d{4})'
+    match = re.match(pattern, first_line)
+    
+    if match:
+        day, month_fr, year = match.groups()
+        month_num = fr_months.get(month_fr.lower())
+        if month_num:
+            try:
+                return datetime(int(year), month_num, int(day))
+            except ValueError:
+                return None
+    return None
 
-- Extrait les faits et informations importantes à mentionner
-- Résume et output en français.
-- Accorde les verbes au passé composé ou à l'imparfait.
-- Ajoute le numéro de pièce à la fin du paragraphe comme dans la structure à suivre
-- Extrait et ajoute la date en format "JJ mois AAAA" 
-
-Met la totalité du texte en forme une seule fois en suivant cette structure :
-
-Le <date>, <brève explication des faits>.
-
-<Explication résumée des faits en utilisant les termes clés> (Pièce nºx).
-
-((({})))"""
-
-
-prompt_template_bordereau = """
-
-Tu reçois un transcript d'une pièce juridique entre les triples parenthèses.
-Tu vas générer une ligne de bordereau de pièce en suivant ces directives :
-
-- Extrait le titre de la pièce qui décrit le plus justement la pièce en utilisant la terminologie juridique.
-- Sois précis et concis dans le titre.
-- Écris le titre avec une majuscule au début et le reste en minuscule.
-- Extrait le numéro de la pièce, que tu trouveras au début du transcript sous le format (Pièce Nºx)
-- Ajoute le numéro de pièce en notant simplement son chiffre comme dans la structure à suivre
-- Extrait et ajoute la date des faits de la pièce en format "JJ mois AAAA" 
-
-Output en suivant cette structure :
-
-<nº de pièce> - <Titre de la pièce> - du <JJ mois AAAA>
-
-IMPORTANT :
-- Relis ton output et verifie les conditions suivantes :
-- Dans le cas précis où la pièce est une attestation de témoin, mentionne le genre (Monsieur ou Madame) et le nom de famille de l'individu seulement (tout en majuscules).
-
-((({})))"""
-
-
-
+# Function to sort summaries based only on their initial paragraph dates
+def sort_summaries_chronologically(combined_summaries):
+    """
+    Sort summaries based only on their initial paragraph dates.
+    """
+    summaries = combined_summaries.split('------\n\n')
+    dated_summaries = []
+    undated_summaries = []
+    
+    for summary in summaries:
+        summary = summary.strip()
+        date = parse_initial_date_fr(summary)
+        
+        if date:
+            dated_summaries.append((date, summary))
+        else:
+            undated_summaries.append(summary)
+    
+    dated_summaries.sort(key=lambda x: x[0])
+    sorted_texts = [s[1] for s in dated_summaries] + undated_summaries
+    return '\n\n------\n\n'.join(sorted_texts)
 
 # Function to summarize the pdfs into ready to use summaries for conclusions
 def process_uploaded_files(uploaded_files):
@@ -347,20 +412,24 @@ def process_uploaded_files(uploaded_files):
     # Generate summary
     summary = summarize_transcripts(prompt_template_summary, extracted_texts)
     
-    # Generate bordereau entries for each piece
+    # Generate chronological version
+    chronological_summary = sort_summaries_chronologically(summary)
+    
+    # Generate bordereau entries
     bordereau_entries = []
     for transcript in extracted_texts:
         response = call_gpt(user_prompt=prompt_template_bordereau.format(transcript), temperature=0)
         if response:
             bordereau_entry = response.choices[0].message.content.strip()
             bordereau_entries.append(bordereau_entry)
-            print(f"Bordereau entry generated: {bordereau_entry}")
     
-    # Combine summary and bordereau with newlines between entries
+    # Combine bordereau with both versions
     bordereau_section = "BORDEREAU DE PIECES COMMUNIQUEES\n\n" + "\n".join(entry + "\n" for entry in bordereau_entries)
-    complete_document = f"{summary}\n\n{'='*50}\n\n{bordereau_section}"
-    return complete_document
-
+    
+    return {
+        'original': f"{summary}\n\n{'='*50}\n\n{bordereau_section}",
+        'chronological': f"{chronological_summary}\n\n{'='*50}\n\n{bordereau_section}"
+    }
 
 # Keep existing function unchanged for legal documents
 def create_summary_word_document(summary_text):
@@ -411,6 +480,7 @@ def create_single_document_summary_word(summary_text, document_name):
     
     return doc_buffer
 
+# Function to extract text from a Word document
 def extract_text_from_word(file):
     doc = Document(file)
     text = ""
@@ -429,6 +499,7 @@ def extract_text_from_word(file):
     
     return text
 
+# Function to extract text from a single document
 def extract_text_from_single_document(file):
     if file.name.lower().endswith('.pdf'):
         # Reuse existing PDF extraction but for single file
@@ -441,21 +512,7 @@ def extract_text_from_single_document(file):
     else:
         raise ValueError("Format de fichier non supporté. Veuillez mettre en ligne un document PDF ou Word.")
 
-# Add new prompt template for general summarization
-prompt_template_general = """
-
-Résume le texte entre les triples parenthèses en suivant ces directives :
-- Idées et points clés
-- Détails importants et conclusions
-- Flux logique de l'information
-- Conclusions ou résultats
-
-Structure le résumé en paragraphes clairs et conserve le sens original tout en étant concis.
-
-Texte à résumer :
-((({})))
-"""
-
+# Function to summarize a single document
 def summarize_single_document(file):
     try:
         # Extract text
@@ -473,6 +530,9 @@ def summarize_single_document(file):
             
     except Exception as e:
         return f"An error occurred: {str(e)}"
+
+
+#### STREAMLIT APP ####
 
 # Simple sidebar navigation
 st.sidebar.title("Navigation")
@@ -505,48 +565,79 @@ if selected_function == "Générer un résumé de pièces juridiques avec border
     st.markdown("####")
 
     # Initialize session state
-    if 'summary' not in st.session_state:
-        st.session_state.summary = None
+    if 'summaries' not in st.session_state:
+        st.session_state.summaries = None
 
     st.markdown("#### Ajoutez tous vos fichiers PDF ci-dessous")
     uploaded_files = st.file_uploader(
-        label="Upload des pièces juridiques",  # Added label
+        label="Upload des pièces juridiques",
         type="pdf", 
         accept_multiple_files=True, 
-        label_visibility="collapsed",  # Hide the label
+        label_visibility="collapsed",
         key="pdf_uploader_summary"
     )
 
     if uploaded_files:
         if st.button("Générer le résumé"):
             with st.spinner("Nous générons votre résumé..."):
-                st.session_state.summary = process_uploaded_files(uploaded_files)
+                st.session_state.summaries = process_uploaded_files(uploaded_files)
 
-    if st.session_state.summary:
+    if st.session_state.summaries:
         st.markdown("### ")
         st.markdown("### Résumé et Bordereau")
-        st.markdown(st.session_state.summary)
-        st.markdown("### ")
         
-        # Create two columns for download buttons
-        col1, col2 = st.columns(2)
+        # Add tabs for different versions
+        tab1, tab2 = st.tabs(["Version originale", "Version chronologique"])
         
-        with col1:
-            st.download_button(
-                label="📥 Télécharger en .txt",
-                data=st.session_state.summary,
-                file_name="resume_et_bordereau.txt",
-                mime="text/plain"
-            )
+        with tab1:
+            st.markdown(st.session_state.summaries['original'])
+            
+            # Create two columns for download buttons
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.download_button(
+                    label="📥 Télécharger en .txt",
+                    data=st.session_state.summaries['original'],
+                    file_name="resume_et_bordereau.txt",
+                    mime="text/plain",
+                    key="download_original_txt"
+                )
+            
+            with col2:
+                word_buffer = create_summary_word_document(st.session_state.summaries['original'])
+                st.download_button(
+                    label="📥 Télécharger en Word",
+                    data=word_buffer,
+                    file_name="resume_et_bordereau.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="download_original_word"
+                )
         
-        with col2:
-            word_buffer = create_summary_word_document(st.session_state.summary)
-            st.download_button(
-                label="📥 Télécharger en Word",
-                data=word_buffer,
-                file_name="resume_et_bordereau.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+        with tab2:
+            st.markdown(st.session_state.summaries['chronological'])
+            
+            # Create two columns for download buttons
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.download_button(
+                    label="📥 Télécharger en .txt",
+                    data=st.session_state.summaries['chronological'],
+                    file_name="resume_et_bordereau_chronologique.txt",
+                    mime="text/plain",
+                    key="download_chrono_txt"
+                )
+            
+            with col2:
+                word_buffer = create_summary_word_document(st.session_state.summaries['chronological'])
+                st.download_button(
+                    label="📥 Télécharger en Word",
+                    data=word_buffer,
+                    file_name="resume_et_bordereau_chronologique.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="download_chrono_word"
+                )
 
 elif selected_function == "PDF à Word":
     st.title("Convertisseur PDF vers Word")
