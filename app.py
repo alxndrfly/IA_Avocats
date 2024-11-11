@@ -19,41 +19,41 @@ import re
 ############# Deployed variables #############
 
 # Convert AttrDict to a regular dictionary
-# google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
+google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
 
 # Create a temporary file
-# creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 
 # Write the credentials to the temporary file
-# json.dump(google_creds, creds_temp_file)
-# creds_temp_file.flush()
+json.dump(google_creds, creds_temp_file)
+creds_temp_file.flush()
 
 # Set the environment variable
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
 
 
 # Add the cleanup function and register it
-# def cleanup_temp_file():
-#     if os.path.exists(creds_temp_file.name):
-#         os.unlink(creds_temp_file.name)
+def cleanup_temp_file():
+    if os.path.exists(creds_temp_file.name):
+        os.unlink(creds_temp_file.name)
 
-# atexit.register(cleanup_temp_file)
+atexit.register(cleanup_temp_file)
 
 # Initialize the OpenAI client with the secret
-# client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 ############# END OF Deployed environment variables #############
 
 
 ############# Local environment variables #############
 # Load environment variables from .env file
-load_dotenv()
+# load_dotenv()
 
 # Set the Google Cloud credentials for this session
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
 # Initialize the OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 ############# END OF Local environment variables #############
 
