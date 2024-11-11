@@ -8,7 +8,7 @@ from openai import OpenAI
 import tempfile
 import json
 import atexit
-from dotenv import load_dotenv          # Comment out for deployed environment
+# from dotenv import load_dotenv          # Comment out for deployed environment
 from docx import Document
 from docx.shared import Inches, Pt, Mm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
