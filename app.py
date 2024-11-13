@@ -8,7 +8,6 @@ from openai import OpenAI
 import tempfile
 import json
 import atexit
-# from dotenv import load_dotenv          # Comment out for deployed environment
 from docx import Document
 from docx.shared import Inches, Pt, Mm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -16,46 +15,38 @@ from docx.enum.section import WD_SECTION
 from datetime import datetime
 import re
 
-############# Deployed variables #############
+############# CHECK TO HANDLE DEPLOYED AND LOCAL ENVIRONMENT #############
 
-# Convert AttrDict to a regular dictionary
-google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
+# Check if we're running on Streamlit Cloud
+is_deployed = os.environ.get('STREAMLIT_RUNTIME') is not None
 
-# Create a temporary file
-creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+if is_deployed:
+    # Deployed environment setup
+    google_creds = dict(st.secrets["GOOGLE_APPLICATION_CREDENTIALS"])
+    creds_temp_file = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+    json.dump(google_creds, creds_temp_file)
+    creds_temp_file.flush()
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
+    
+    # Add cleanup function and register it
+    def cleanup_temp_file():
+        if os.path.exists(creds_temp_file.name):
+            os.unlink(creds_temp_file.name)
+    
+    atexit.register(cleanup_temp_file)
+    
+    # Initialize OpenAI client with Streamlit secrets
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Write the credentials to the temporary file
-json.dump(google_creds, creds_temp_file)
-creds_temp_file.flush()
+else:
+    # Local environment setup
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    # Set Google Cloud credentials and OpenAI client from .env
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-# Set the environment variable
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_temp_file.name
-
-
-# Add the cleanup function and register it
-def cleanup_temp_file():
-    if os.path.exists(creds_temp_file.name):
-        os.unlink(creds_temp_file.name)
-
-atexit.register(cleanup_temp_file)
-
-# Initialize the OpenAI client with the secret
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-############# END OF Deployed environment variables #############
-
-
-############# Local environment variables #############
-# Load environment variables from .env file
-# load_dotenv()
-
-# Set the Google Cloud credentials for this session
-# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-
-# Initialize the OpenAI client
-# client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-
-############# END OF Local environment variables #############
 
 
 
