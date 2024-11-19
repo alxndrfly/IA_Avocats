@@ -1,5 +1,24 @@
 # Changelog
-## [Version 3.0.0] - 2024-11-08
+
+## [Version 4.0.0] - 2024-11-19
+### Added
+- Generateur de résumés avec bordeaux now works with images/photos :
+  - Classifies pages by type (TEXT, IMAGE, SKIP)
+  - Describes images using GPT-4o
+
+- Résumé de document PDF ou Word adjusts it's output to the size of the text :
+  - Chunking summary API requests with a set token size
+  - Allows for longer documents to be summarized correctly
+
+- New sidebar layout
+
+- Improved instructions and readability of each functionality
+
+### Fixed
+- PDF to Word conversion now uses adobe API to get a good PDF to Word conversion
+
+
+## [Version 3.0.0] - 2024-11-11
 ### Added
 - New feature: Organizes summaries by chronological order
 
