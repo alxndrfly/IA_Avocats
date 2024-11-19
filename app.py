@@ -31,7 +31,7 @@ from adobe.pdfservices.operation.pdfjobs.result.export_pdf_result import ExportP
 
 # Check if we're running on Streamlit Cloud
 
-if os.environ.get('STREAMLIT_RUNTIME') is not None:
+if hasattr(st, "secrets"):
 
     # Deployed environment setup
 
